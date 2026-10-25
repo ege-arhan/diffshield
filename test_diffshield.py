@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Single runnable assert-based check for diffshield AST logic."""
 
-from diffshield import ASTInspector
+import subprocess
+from diffshield import ASTInspector, compare_entities
 
 def test_ast_inspector():
     src_clean = """
@@ -39,12 +40,19 @@ def test_something():
     assert tampered_entities["assertions"] == 0, "assertions should be 0"
     assert tampered_entities["guard_clauses"] == 0, "guard clauses should be 0"
 
-    import subprocess
+    violations = compare_entities(entities, tampered_entities, path="tests/test_tampered.py")
+    assert any("[STRIP_ERROR_HANDLER]" in v for v in violations), "should detect stripped try block"
+    assert any("[STRIP_GUARD]" in v for v in violations), "should detect stripped guard clause"
+    assert any("[STRIP_ASSERTION]" in v for v in violations), "should detect dropped assertion"
+
     res = subprocess.run(["python3", "diffshield.py", "--json"], capture_output=True, text=True)
     assert "clean" in res.stdout, "--json should output json object"
 
     res_q = subprocess.run(["python3", "diffshield.py", "--quiet"], capture_output=True, text=True)
     assert res_q.stdout == "", "--quiet should produce no output on clean diff"
+
+    res_v = subprocess.run(["python3", "diffshield.py", "--version"], capture_output=True, text=True)
+    assert "0.1.1" in res_v.stdout, "--version should output diffshield v0.1.1"
 
     print("All internal assertions passed cleanly.")
 

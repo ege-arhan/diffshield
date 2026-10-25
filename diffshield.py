@@ -10,15 +10,9 @@ import json
 import os
 import subprocess
 import sys
-from typing import Dict, List, Set, Tuple
+from typing import Dict, List, Set
 
 # ponytail: stdlib-only python AST parser first. Add tree-sitter/oxc when multi-language support is requested.
-
-class CodeEntity:
-    def __init__(self, name: str, kind: str, line: int):
-        self.name = name
-        self.kind = kind
-        self.line = line
 
 class ASTInspector:
     @staticmethod
@@ -55,6 +49,39 @@ class ASTInspector:
                         data["guard_clauses"] += 1
                         break
         return data
+
+def compare_entities(old_meta: Dict[str, any], new_meta: Dict[str, any], path: str = "") -> List[str]:
+    """Compare entity sets and counters to identify semantic deletions."""
+    violations = []
+    prefix = f"{path}: " if path else ""
+
+    # 1. Dropped functions
+    dropped_funcs = old_meta["functions"] - new_meta["functions"]
+    if dropped_funcs:
+        violations.append(f"[DROP_FUNC] {prefix}deleted functions -> {', '.join(sorted(dropped_funcs))}")
+
+    # 2. Dropped classes
+    dropped_classes = old_meta["classes"] - new_meta["classes"]
+    if dropped_classes:
+        violations.append(f"[DROP_CLASS] {prefix}deleted classes -> {', '.join(sorted(dropped_classes))}")
+
+    # 3. Stripped error handling (try/catch blocks)
+    if old_meta["try_blocks"] > new_meta["try_blocks"]:
+        diff_cnt = old_meta["try_blocks"] - new_meta["try_blocks"]
+        violations.append(f"[STRIP_ERROR_HANDLER] {prefix}stripped {diff_cnt} try/except block(s)")
+
+    # 4. Stripped test assertions
+    is_test = ("test" in path.lower()) if path else True
+    if is_test and old_meta["assertions"] > new_meta["assertions"]:
+        diff_cnt = old_meta["assertions"] - new_meta["assertions"]
+        violations.append(f"[STRIP_ASSERTION] {prefix}dropped {diff_cnt} test assertion(s)")
+
+    # 5. Stripped guard clauses (if cond: return/raise)
+    if old_meta["guard_clauses"] > new_meta["guard_clauses"]:
+        diff_cnt = old_meta["guard_clauses"] - new_meta["guard_clauses"]
+        violations.append(f"[STRIP_GUARD] {prefix}removed {diff_cnt} guard clause(s)")
+
+    return violations
 
 def get_git_file_content(commit_ref: str, path: str) -> str:
     """Get file content from git at a given ref (e.g. HEAD)."""
@@ -97,41 +124,19 @@ def audit_diff() -> List[str]:
 
         old_meta = ASTInspector.extract_entities(old_src)
         new_meta = ASTInspector.extract_entities(new_src)
-
-        # 1. Dropped functions
-        dropped_funcs = old_meta["functions"] - new_meta["functions"]
-        if dropped_funcs:
-            violations.append(f"[DROP_FUNC] {path}: deleted functions -> {', '.join(sorted(dropped_funcs))}")
-
-        # 2. Dropped classes
-        dropped_classes = old_meta["classes"] - new_meta["classes"]
-        if dropped_classes:
-            violations.append(f"[DROP_CLASS] {path}: deleted classes -> {', '.join(sorted(dropped_classes))}")
-
-        # 3. Stripped error handling (try/catch blocks)
-        if old_meta["try_blocks"] > new_meta["try_blocks"]:
-            diff_cnt = old_meta["try_blocks"] - new_meta["try_blocks"]
-            violations.append(f"[STRIP_ERROR_HANDLER] {path}: stripped {diff_cnt} try/except block(s)")
-
-        # 4. Stripped test assertions
-        if "test" in path.lower() and old_meta["assertions"] > new_meta["assertions"]:
-            diff_cnt = old_meta["assertions"] - new_meta["assertions"]
-            violations.append(f"[STRIP_ASSERTION] {path}: dropped {diff_cnt} test assertion(s)")
-
-        # 5. Stripped guard clauses (if cond: return/raise)
-        if old_meta["guard_clauses"] > new_meta["guard_clauses"]:
-            diff_cnt = old_meta["guard_clauses"] - new_meta["guard_clauses"]
-            violations.append(f"[STRIP_GUARD] {path}: removed {diff_cnt} guard clause(s)")
+        violations.extend(compare_entities(old_meta, new_meta, path=path))
 
     return violations
 
 def main():
-    if len(sys.argv) > 1 and sys.argv[1] == "version":
-        print("diffshield v0.1.0")
+    if len(sys.argv) > 1 and sys.argv[1] in ("version", "--version"):
+        print("diffshield v0.1.1")
         return
 
+    # ponytail: naive sys.argv parsing. Upgrade to argparse when subcommands or complex flags are added.
     json_mode = "--json" in sys.argv
     quiet_mode = "--quiet" in sys.argv or "-q" in sys.argv
+    allow_deletions = "--allow-deletions" in sys.argv
 
     violations = audit_diff()
 
@@ -139,14 +144,22 @@ def main():
         payload = {
             "clean": len(violations) == 0,
             "violations": violations,
-            "count": len(violations)
+            "count": len(violations),
+            "allowed": allow_deletions and len(violations) > 0
         }
         print(json.dumps(payload, indent=2))
-        sys.exit(0 if not violations else 1)
+        sys.exit(0 if (not violations or allow_deletions) else 1)
 
     if not violations:
         if not quiet_mode:
             print("🛡️  diffshield: No semantic deletions or contract breaks detected. Clean diff.")
+        sys.exit(0)
+
+    if allow_deletions:
+        if not quiet_mode:
+            print("⚠️  diffshield: Semantic deletions detected, but permitted via --allow-deletions:")
+            for v in violations:
+                print(f"  • {v}")
         sys.exit(0)
 
     if not quiet_mode:
