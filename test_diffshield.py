@@ -39,6 +39,13 @@ def test_something():
     assert tampered_entities["assertions"] == 0, "assertions should be 0"
     assert tampered_entities["guard_clauses"] == 0, "guard clauses should be 0"
 
+    import subprocess
+    res = subprocess.run(["python3", "diffshield.py", "--json"], capture_output=True, text=True)
+    assert "clean" in res.stdout, "--json should output json object"
+
+    res_q = subprocess.run(["python3", "diffshield.py", "--quiet"], capture_output=True, text=True)
+    assert res_q.stdout == "", "--quiet should produce no output on clean diff"
+
     print("All internal assertions passed cleanly.")
 
 if __name__ == "__main__":

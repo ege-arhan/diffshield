@@ -6,6 +6,7 @@ and dropped test assertions.
 """
 
 import ast
+import json
 import os
 import subprocess
 import sys
@@ -129,16 +130,31 @@ def main():
         print("diffshield v0.1.0")
         return
 
+    json_mode = "--json" in sys.argv
+    quiet_mode = "--quiet" in sys.argv or "-q" in sys.argv
+
     violations = audit_diff()
+
+    if json_mode:
+        payload = {
+            "clean": len(violations) == 0,
+            "violations": violations,
+            "count": len(violations)
+        }
+        print(json.dumps(payload, indent=2))
+        sys.exit(0 if not violations else 1)
+
     if not violations:
-        print("🛡️  diffshield: No semantic deletions or contract breaks detected. Clean diff.")
+        if not quiet_mode:
+            print("🛡️  diffshield: No semantic deletions or contract breaks detected. Clean diff.")
         sys.exit(0)
 
-    print("🚨 diffshield: SEMANTIC DIFF VIOLATION DETECTED!")
-    print("The agent modification dropped critical logic or contracts:")
-    for v in violations:
-        print(f"  • {v}")
-    print("\nAction: Refusing commit. Review changes or run with --allow-deletions if intentional.")
+    if not quiet_mode:
+        print("🚨 diffshield: SEMANTIC DIFF VIOLATION DETECTED!")
+        print("The agent modification dropped critical logic or contracts:")
+        for v in violations:
+            print(f"  • {v}")
+        print("\nAction: Refusing commit. Review changes or run with --allow-deletions if intentional.")
     sys.exit(1)
 
 if __name__ == "__main__":
