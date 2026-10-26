@@ -91,29 +91,24 @@ def get_git_file_content(commit_ref: str, path: str) -> str:
     except subprocess.CalledProcessError:
         return ""
 
-def get_changed_files() -> List[str]:
-    """Get list of modified and unstaged/staged files."""
+def get_changed_files(base_ref: str = "HEAD") -> List[str]:
+    """Get list of modified and unstaged/staged files against base_ref."""
     try:
-        out = subprocess.check_output(["git", "diff", "--name-only", "HEAD"], stderr=subprocess.DEVNULL)
+        out = subprocess.check_output(["git", "diff", "--name-only", base_ref], stderr=subprocess.DEVNULL)
         files = [f.strip() for f in out.decode().splitlines() if f.strip().endswith(".py")]
-        # Also check untracked changes vs staged
-        out_cached = subprocess.check_output(["git", "diff", "--name-only", "--cached"], stderr=subprocess.DEVNULL)
-        for f in out_cached.decode().splitlines():
-            if f.strip().endswith(".py") and f.strip() not in files:
-                files.append(f.strip())
-        return files
+        return sorted(list(set(files)))
     except subprocess.CalledProcessError:
         return []
 
-def audit_diff() -> List[str]:
-    """Audit current working directory diff for dangerous semantic deletions."""
-    files = get_changed_files()
+def audit_diff(base_ref: str = "HEAD") -> List[str]:
+    """Audit diff against base_ref for dangerous semantic deletions."""
+    files = get_changed_files(base_ref=base_ref)
     violations = []
 
     for path in files:
         if not os.path.isfile(path):
             continue
-        old_src = get_git_file_content("HEAD", path)
+        old_src = get_git_file_content(base_ref, path)
         if not old_src:
             continue
         try:
@@ -130,7 +125,7 @@ def audit_diff() -> List[str]:
 
 def main():
     if len(sys.argv) > 1 and sys.argv[1] in ("version", "--version"):
-        print("diffshield v0.1.1")
+        print("diffshield v0.1.2")
         return
 
     # ponytail: naive sys.argv parsing. Upgrade to argparse when subcommands or complex flags are added.
@@ -138,7 +133,14 @@ def main():
     quiet_mode = "--quiet" in sys.argv or "-q" in sys.argv
     allow_deletions = "--allow-deletions" in sys.argv
 
-    violations = audit_diff()
+    base_ref = "HEAD"
+    for i, arg in enumerate(sys.argv):
+        if arg == "--base" and i + 1 < len(sys.argv):
+            base_ref = sys.argv[i + 1]
+        elif arg.startswith("--base="):
+            base_ref = arg.split("=", 1)[1]
+
+    violations = audit_diff(base_ref=base_ref)
 
     if json_mode:
         payload = {

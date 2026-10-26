@@ -52,7 +52,10 @@ def test_something():
     assert res_q.stdout == "", "--quiet should produce no output on clean diff"
 
     res_v = subprocess.run(["python3", "diffshield.py", "--version"], capture_output=True, text=True)
-    assert "0.1.1" in res_v.stdout, "--version should output diffshield v0.1.1"
+    assert "0.1.2" in res_v.stdout, "--version should output diffshield v0.1.2"
+
+    res_base = subprocess.run(["python3", "diffshield.py", "--base", "HEAD", "--json"], capture_output=True, text=True)
+    assert "clean" in res_base.stdout, "--base should accept git ref"
 
     print("All internal assertions passed cleanly.")
 
