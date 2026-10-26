@@ -45,16 +45,18 @@ def test_something():
     assert any("[STRIP_GUARD]" in v for v in violations), "should detect stripped guard clause"
     assert any("[STRIP_ASSERTION]" in v for v in violations), "should detect dropped assertion"
 
-    res = subprocess.run(["python3", "diffshield.py", "--json"], capture_output=True, text=True)
+    import os
+    here = os.path.dirname(os.path.abspath(__file__))
+    res = subprocess.run(["python3", os.path.join(here, "diffshield.py"), "--json"], capture_output=True, text=True, cwd=here)
     assert "clean" in res.stdout, "--json should output json object"
 
-    res_q = subprocess.run(["python3", "diffshield.py", "--quiet"], capture_output=True, text=True)
+    res_q = subprocess.run(["python3", os.path.join(here, "diffshield.py"), "--quiet"], capture_output=True, text=True, cwd=here)
     assert res_q.stdout == "", "--quiet should produce no output on clean diff"
 
-    res_v = subprocess.run(["python3", "diffshield.py", "--version"], capture_output=True, text=True)
+    res_v = subprocess.run(["python3", os.path.join(here, "diffshield.py"), "--version"], capture_output=True, text=True, cwd=here)
     assert "0.1.2" in res_v.stdout, "--version should output diffshield v0.1.2"
 
-    res_base = subprocess.run(["python3", "diffshield.py", "--base", "HEAD", "--json"], capture_output=True, text=True)
+    res_base = subprocess.run(["python3", os.path.join(here, "diffshield.py"), "--base", "HEAD", "--json"], capture_output=True, text=True, cwd=here)
     assert "clean" in res_base.stdout, "--base should accept git ref"
 
     print("All internal assertions passed cleanly.")
