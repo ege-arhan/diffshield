@@ -40,8 +40,12 @@ Cloud reviewers (CodeRabbit) catch this too late at PR review. `diffshield` runs
 # Run audit on current uncommitted changes
 python3 diffshield.py
 
+# Run audit on staged changes only (pre-commit)
+python3 diffshield.py --staged
+
 # Install as git pre-commit hook
-ln -sf $(pwd)/diffshield.py .git/hooks/pre-commit
+echo '#!/bin/sh\nexec python3 diffshield.py --staged' > .git/hooks/pre-commit
+chmod +x .git/hooks/pre-commit
 ```
 
 ### Example Output

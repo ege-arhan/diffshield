@@ -54,10 +54,16 @@ def test_something():
     assert res_q.stdout == "", "--quiet should produce no output on clean diff"
 
     res_v = subprocess.run(["python3", os.path.join(here, "diffshield.py"), "--version"], capture_output=True, text=True, cwd=here)
-    assert "0.1.2" in res_v.stdout, "--version should output diffshield v0.1.2"
+    assert "0.1.3" in res_v.stdout, "--version should output diffshield v0.1.3"
+
+    res_help = subprocess.run(["python3", os.path.join(here, "diffshield.py"), "--help"], capture_output=True, text=True, cwd=here)
+    assert "Usage: diffshield" in res_help.stdout, "--help should output usage help"
 
     res_base = subprocess.run(["python3", os.path.join(here, "diffshield.py"), "--base", "HEAD", "--json"], capture_output=True, text=True, cwd=here)
     assert "clean" in res_base.stdout, "--base should accept git ref"
+
+    res_staged = subprocess.run(["python3", os.path.join(here, "diffshield.py"), "--staged", "--json"], capture_output=True, text=True, cwd=here)
+    assert "clean" in res_staged.stdout, "--staged should accept staged flag"
 
     print("All internal assertions passed cleanly.")
 

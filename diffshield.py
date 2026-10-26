@@ -84,38 +84,47 @@ def compare_entities(old_meta: Dict[str, any], new_meta: Dict[str, any], path: s
     return violations
 
 def get_git_file_content(commit_ref: str, path: str) -> str:
-    """Get file content from git at a given ref (e.g. HEAD)."""
+    """Get file content from git at a given ref (e.g. HEAD) or index if commit_ref is empty."""
+    target = f":{path}" if not commit_ref else f"{commit_ref}:{path}"
     try:
-        out = subprocess.check_output(["git", "show", f"{commit_ref}:{path}"], stderr=subprocess.DEVNULL)
+        out = subprocess.check_output(["git", "show", target], stderr=subprocess.DEVNULL)
         return out.decode("utf-8", errors="ignore")
     except subprocess.CalledProcessError:
         return ""
 
-def get_changed_files(base_ref: str = "HEAD") -> List[str]:
+def get_changed_files(base_ref: str = "HEAD", staged: bool = False) -> List[str]:
     """Get list of modified and unstaged/staged files against base_ref."""
+    cmd = ["git", "diff", "--name-only"]
+    if staged:
+        cmd.extend(["--cached", base_ref])
+    else:
+        cmd.append(base_ref)
     try:
-        out = subprocess.check_output(["git", "diff", "--name-only", base_ref], stderr=subprocess.DEVNULL)
+        out = subprocess.check_output(cmd, stderr=subprocess.DEVNULL)
         files = [f.strip() for f in out.decode().splitlines() if f.strip().endswith(".py")]
         return sorted(list(set(files)))
     except subprocess.CalledProcessError:
         return []
 
-def audit_diff(base_ref: str = "HEAD") -> List[str]:
+def audit_diff(base_ref: str = "HEAD", staged: bool = False) -> List[str]:
     """Audit diff against base_ref for dangerous semantic deletions."""
-    files = get_changed_files(base_ref=base_ref)
+    files = get_changed_files(base_ref=base_ref, staged=staged)
     violations = []
 
     for path in files:
-        if not os.path.isfile(path):
-            continue
         old_src = get_git_file_content(base_ref, path)
         if not old_src:
             continue
-        try:
-            with open(path, "r", encoding="utf-8", errors="ignore") as f:
-                new_src = f.read()
-        except OSError:
-            continue
+        if staged:
+            new_src = get_git_file_content("", path)
+        else:
+            if not os.path.isfile(path):
+                continue
+            try:
+                with open(path, "r", encoding="utf-8", errors="ignore") as f:
+                    new_src = f.read()
+            except OSError:
+                continue
 
         old_meta = ASTInspector.extract_entities(old_src)
         new_meta = ASTInspector.extract_entities(new_src)
@@ -123,15 +132,34 @@ def audit_diff(base_ref: str = "HEAD") -> List[str]:
 
     return violations
 
+HELP_TEXT = """Usage: diffshield [OPTIONS]
+
+Zero-overhead semantic diff firewall for AI coding agents.
+
+Options:
+  --base <ref>       Git reference to compare against (default: HEAD)
+  --staged, --cached Audit staged/indexed changes only (pre-commit hook mode)
+  --allow-deletions  Warn on semantic deletions instead of exiting with 1
+  --json             Output results as JSON
+  -q, --quiet        Suppress output when diff is clean
+  -h, --help         Show this help message and exit
+  -v, --version      Show diffshield version and exit
+"""
+
 def main():
-    if len(sys.argv) > 1 and sys.argv[1] in ("version", "--version"):
-        print("diffshield v0.1.2")
+    if any(arg in sys.argv[1:] for arg in ("-h", "--help")):
+        print(HELP_TEXT.strip())
+        return
+
+    if any(arg in sys.argv[1:] for arg in ("-v", "--version", "version")):
+        print("diffshield v0.1.3")
         return
 
     # ponytail: naive sys.argv parsing. Upgrade to argparse when subcommands or complex flags are added.
     json_mode = "--json" in sys.argv
     quiet_mode = "--quiet" in sys.argv or "-q" in sys.argv
     allow_deletions = "--allow-deletions" in sys.argv
+    staged = "--staged" in sys.argv or "--cached" in sys.argv
 
     base_ref = "HEAD"
     for i, arg in enumerate(sys.argv):
@@ -140,7 +168,7 @@ def main():
         elif arg.startswith("--base="):
             base_ref = arg.split("=", 1)[1]
 
-    violations = audit_diff(base_ref=base_ref)
+    violations = audit_diff(base_ref=base_ref, staged=staged)
 
     if json_mode:
         payload = {
