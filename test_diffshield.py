@@ -6,6 +6,8 @@ from diffshield import ASTInspector, compare_entities
 
 def test_ast_inspector():
     src_clean = """
+@auth.required
+@rate_limit(10)
 def authenticate(token: str):
     if not token:
         raise ValueError("token required")
@@ -16,6 +18,10 @@ def authenticate(token: str):
         log.error(e)
         return None
 
+@dataclass
+class Session:
+    pass
+
 def test_something():
     assert 1 == 1
     assert 2 == 2
@@ -23,14 +29,20 @@ def test_something():
     entities = ASTInspector.extract_entities(src_clean)
     assert "authenticate" in entities["functions"], "fail func detection"
     assert "test_something" in entities["functions"], "fail func detection"
+    assert "Session" in entities["classes"], "fail class detection"
     assert entities["try_blocks"] == 1, "fail try block detection"
     assert entities["assertions"] == 2, "fail assertion detection"
     assert entities["guard_clauses"] == 1, "fail guard clause detection"
+    assert ("authenticate", "@auth.required") in entities["decorators"]
+    assert ("Session", "@dataclass") in entities["decorators"]
 
-    # Agent deletes error handling and assertion
+    # Agent deletes error handling, assertion, and decorators
     src_tampered = """
 def authenticate(token: str):
     return decode(token)
+
+class Session:
+    pass
 
 def test_something():
     pass
@@ -39,11 +51,15 @@ def test_something():
     assert tampered_entities["try_blocks"] == 0, "try block should be 0"
     assert tampered_entities["assertions"] == 0, "assertions should be 0"
     assert tampered_entities["guard_clauses"] == 0, "guard clauses should be 0"
+    assert len(tampered_entities["decorators"]) == 0, "decorators should be 0"
 
     violations = compare_entities(entities, tampered_entities, path="tests/test_tampered.py")
     assert any("[STRIP_ERROR_HANDLER]" in v for v in violations), "should detect stripped try block"
     assert any("[STRIP_GUARD]" in v for v in violations), "should detect stripped guard clause"
     assert any("[STRIP_ASSERTION]" in v for v in violations), "should detect dropped assertion"
+    assert any("[STRIP_DECORATOR]" in v for v in violations), "should detect stripped decorator"
+    assert any("@auth.required from authenticate" in v for v in violations)
+    assert any("@dataclass from Session" in v for v in violations)
 
     import os
     here = os.path.dirname(os.path.abspath(__file__))
@@ -54,7 +70,7 @@ def test_something():
     assert res_q.stdout == "", "--quiet should produce no output on clean diff"
 
     res_v = subprocess.run(["python3", os.path.join(here, "diffshield.py"), "--version"], capture_output=True, text=True, cwd=here)
-    assert "0.1.3" in res_v.stdout, "--version should output diffshield v0.1.3"
+    assert "0.1.4" in res_v.stdout, "--version should output diffshield v0.1.4"
 
     res_help = subprocess.run(["python3", os.path.join(here, "diffshield.py"), "--help"], capture_output=True, text=True, cwd=here)
     assert "Usage: diffshield" in res_help.stdout, "--help should output usage help"

@@ -14,6 +14,28 @@ from typing import Dict, List, Set
 
 # ponytail: stdlib-only python AST parser first. Add tree-sitter/oxc when multi-language support is requested.
 
+def _get_decorator_name(node: ast.AST) -> str:
+    """Extract decorator name identifier or dotted path."""
+    if hasattr(ast, "unparse"):
+        try:
+            return ast.unparse(node).split("(")[0].strip()
+        except Exception:
+            pass
+    while isinstance(node, ast.Call):
+        node = node.func
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        parts = []
+        cur = node
+        while isinstance(cur, ast.Attribute):
+            parts.append(cur.attr)
+            cur = cur.value
+        if isinstance(cur, ast.Name):
+            parts.append(cur.id)
+        return ".".join(reversed(parts))
+    return "decorator"
+
 class ASTInspector:
     @staticmethod
     def extract_entities(source: str) -> Dict[str, any]:
@@ -21,6 +43,7 @@ class ASTInspector:
         data = {
             "functions": set(),
             "classes": set(),
+            "decorators": set(),
             "try_blocks": 0,
             "assertions": 0,
             "guard_clauses": 0
@@ -36,8 +59,12 @@ class ASTInspector:
         for node in ast.walk(tree):
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 data["functions"].add(node.name)
+                for dec in node.decorator_list:
+                    data["decorators"].add((node.name, f"@{_get_decorator_name(dec)}"))
             elif isinstance(node, ast.ClassDef):
                 data["classes"].add(node.name)
+                for dec in node.decorator_list:
+                    data["decorators"].add((node.name, f"@{_get_decorator_name(dec)}"))
             elif isinstance(node, ast.Try):
                 data["try_blocks"] += 1
             elif isinstance(node, ast.Assert):
@@ -80,6 +107,14 @@ def compare_entities(old_meta: Dict[str, any], new_meta: Dict[str, any], path: s
     if old_meta["guard_clauses"] > new_meta["guard_clauses"]:
         diff_cnt = old_meta["guard_clauses"] - new_meta["guard_clauses"]
         violations.append(f"[STRIP_GUARD] {prefix}removed {diff_cnt} guard clause(s)")
+
+    # 6. Stripped decorators from surviving functions or classes
+    surviving = (old_meta["functions"] & new_meta["functions"]) | (old_meta["classes"] & new_meta["classes"])
+    old_decs = old_meta.get("decorators", set())
+    new_decs = new_meta.get("decorators", set())
+    dropped_decs = sorted(f"{dec} from {target}" for target, dec in (old_decs - new_decs) if target in surviving)
+    if dropped_decs:
+        violations.append(f"[STRIP_DECORATOR] {prefix}stripped decorator(s) -> {', '.join(dropped_decs)}")
 
     return violations
 
@@ -152,7 +187,7 @@ def main():
         return
 
     if any(arg in sys.argv[1:] for arg in ("-v", "--version", "version")):
-        print("diffshield v0.1.3")
+        print("diffshield v0.1.4")
         return
 
     # ponytail: naive sys.argv parsing. Upgrade to argparse when subcommands or complex flags are added.
