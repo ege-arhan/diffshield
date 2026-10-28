@@ -92,5 +92,27 @@ def test_something():
 
     print("All internal assertions passed cleanly.")
 
+
+def test_whole_file_deletion_blocked():
+    """Agent deleting a file outright must not pass as a clean diff."""
+    import os, tempfile
+    here = os.path.dirname(os.path.abspath(__file__))
+    with tempfile.TemporaryDirectory() as tmp:
+        run = lambda *a: subprocess.run(a, cwd=tmp, capture_output=True, text=True)
+        run("git", "init", "-q")
+        run("git", "config", "user.email", "t@t.t")
+        run("git", "config", "user.name", "t")
+        with open(os.path.join(tmp, "auth.py"), "w") as f:
+            f.write("def check_token(t):\n    if not t:\n        raise PermissionError\n")
+        run("git", "add", "-A")
+        run("git", "commit", "-qm", "init")
+        os.remove(os.path.join(tmp, "auth.py"))
+
+        res = run("python3", os.path.join(here, "diffshield.py"))
+        assert res.returncode == 1, f"deleted file must fail, got {res.returncode}: {res.stdout}"
+        assert "[DROP_FUNC]" in res.stdout, "deleted file should report DROP_FUNC"
+
+
 if __name__ == "__main__":
     test_ast_inspector()
+    test_whole_file_deletion_blocked()

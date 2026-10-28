@@ -7,7 +7,6 @@ and dropped test assertions.
 
 import ast
 import json
-import os
 import subprocess
 import sys
 from typing import Dict, List, Set
@@ -163,13 +162,13 @@ def audit_diff(base_ref: str = "HEAD", staged: bool = False) -> List[str]:
         if staged:
             new_src = get_git_file_content("", path)
         else:
-            if not os.path.isfile(path):
-                continue
             try:
                 with open(path, "r", encoding="utf-8", errors="ignore") as f:
                     new_src = f.read()
             except OSError:
-                continue
+                # Whole-file deletion is the most common agent action: treat as empty
+                # source so every entity counts as dropped instead of skipping it.
+                new_src = ""
 
         old_meta = ASTInspector.extract_entities(old_src)
         new_meta = ASTInspector.extract_entities(new_src)
