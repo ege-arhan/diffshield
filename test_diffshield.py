@@ -22,6 +22,10 @@ def authenticate(token: str):
 class Session:
     pass
 
+def managed_work():
+    with open("data.txt") as f:
+        return f.read()
+
 def test_something():
     assert 1 == 1
     assert 2 == 2
@@ -33,6 +37,7 @@ def test_something():
     assert entities["try_blocks"] == 1, "fail try block detection"
     assert entities["assertions"] == 2, "fail assertion detection"
     assert entities["guard_clauses"] == 1, "fail guard clause detection"
+    assert entities["with_blocks"] == 1, "fail with block detection"
     assert ("authenticate", "@auth.required") in entities["decorators"]
     assert ("Session", "@dataclass") in entities["decorators"]
 
@@ -43,6 +48,9 @@ def authenticate(token: str):
 
 class Session:
     pass
+
+def managed_work():
+    return None
 
 def test_something():
     pass
@@ -58,6 +66,7 @@ def test_something():
     assert any("[STRIP_GUARD]" in v for v in violations), "should detect stripped guard clause"
     assert any("[STRIP_ASSERTION]" in v for v in violations), "should detect dropped assertion"
     assert any("[STRIP_DECORATOR]" in v for v in violations), "should detect stripped decorator"
+    assert any("[STRIP_CONTEXT_MANAGER]" in v for v in violations), "should detect stripped context manager"
     assert any("@auth.required from authenticate" in v for v in violations)
     assert any("@dataclass from Session" in v for v in violations)
 
@@ -70,7 +79,7 @@ def test_something():
     assert res_q.stdout == "", "--quiet should produce no output on clean diff"
 
     res_v = subprocess.run(["python3", os.path.join(here, "diffshield.py"), "--version"], capture_output=True, text=True, cwd=here)
-    assert "0.1.4" in res_v.stdout, "--version should output diffshield v0.1.4"
+    assert "0.1.5" in res_v.stdout, "--version should output diffshield v0.1.5"
 
     res_help = subprocess.run(["python3", os.path.join(here, "diffshield.py"), "--help"], capture_output=True, text=True, cwd=here)
     assert "Usage: diffshield" in res_help.stdout, "--help should output usage help"

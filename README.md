@@ -29,6 +29,7 @@ Cloud reviewers (CodeRabbit) catch this too late at PR review. `diffshield` runs
   - `[DROP_CLASS]`: Detects removed classes.
   - `[STRIP_ERROR_HANDLER]`: Catches stripped `try/except` blocks.
   - `[STRIP_GUARD]`: Flags removed guard clauses (`if ...: return/raise`).
+  - `[STRIP_CONTEXT_MANAGER]`: Flags stripped context managers (`with` / `async with` locks, transactions, file handles).
   - `[STRIP_DECORATOR]`: Detects stripped security or route decorators (`@auth.required`, `@router.get`, `@dataclass`).
   - `[STRIP_ASSERTION]`: Detects deleted test assertions.
 - 🪝 **Pre-commit & CI Native:** Exits with `1` on contract violations to block bad agent commits.

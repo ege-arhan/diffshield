@@ -46,7 +46,8 @@ class ASTInspector:
             "decorators": set(),
             "try_blocks": 0,
             "assertions": 0,
-            "guard_clauses": 0
+            "guard_clauses": 0,
+            "with_blocks": 0
         }
         if not source.strip():
             return data
@@ -67,6 +68,8 @@ class ASTInspector:
                     data["decorators"].add((node.name, f"@{_get_decorator_name(dec)}"))
             elif isinstance(node, ast.Try):
                 data["try_blocks"] += 1
+            elif isinstance(node, (ast.With, ast.AsyncWith)):
+                data["with_blocks"] += 1
             elif isinstance(node, ast.Assert):
                 data["assertions"] += 1
             elif isinstance(node, ast.If):
@@ -115,6 +118,13 @@ def compare_entities(old_meta: Dict[str, any], new_meta: Dict[str, any], path: s
     dropped_decs = sorted(f"{dec} from {target}" for target, dec in (old_decs - new_decs) if target in surviving)
     if dropped_decs:
         violations.append(f"[STRIP_DECORATOR] {prefix}stripped decorator(s) -> {', '.join(dropped_decs)}")
+
+    # 7. Stripped context managers (with/async with blocks)
+    old_with = old_meta.get("with_blocks", 0)
+    new_with = new_meta.get("with_blocks", 0)
+    if old_with > new_with:
+        diff_cnt = old_with - new_with
+        violations.append(f"[STRIP_CONTEXT_MANAGER] {prefix}stripped {diff_cnt} context manager (with) block(s)")
 
     return violations
 
@@ -187,7 +197,7 @@ def main():
         return
 
     if any(arg in sys.argv[1:] for arg in ("-v", "--version", "version")):
-        print("diffshield v0.1.4")
+        print("diffshield v0.1.5")
         return
 
     # ponytail: naive sys.argv parsing. Upgrade to argparse when subcommands or complex flags are added.
