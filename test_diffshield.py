@@ -70,6 +70,16 @@ def test_something():
     assert any("@auth.required from authenticate" in v for v in violations)
     assert any("@dataclass from Session" in v for v in violations)
 
+    # Agent hollows out function body (replaces logic with pass/ellipsis)
+    src_hollow = """
+def authenticate(token: str):
+    pass
+"""
+    hollow_entities = ASTInspector.extract_entities(src_hollow)
+    violations_hollow = compare_entities(entities, hollow_entities, path="auth.py")
+    assert any("[HOLLOW_FUNC]" in v for v in violations_hollow), "should detect hollowed out function"
+    assert any("authenticate" in v for v in violations_hollow)
+
     import os
     here = os.path.dirname(os.path.abspath(__file__))
     res = subprocess.run(["python3", os.path.join(here, "diffshield.py"), "--json"], capture_output=True, text=True, cwd=here)
@@ -79,7 +89,7 @@ def test_something():
     assert res_q.stdout == "", "--quiet should produce no output on clean diff"
 
     res_v = subprocess.run(["python3", os.path.join(here, "diffshield.py"), "--version"], capture_output=True, text=True, cwd=here)
-    assert "0.1.5" in res_v.stdout, "--version should output diffshield v0.1.5"
+    assert "0.1.6" in res_v.stdout, "--version should output diffshield v0.1.6"
 
     res_help = subprocess.run(["python3", os.path.join(here, "diffshield.py"), "--help"], capture_output=True, text=True, cwd=here)
     assert "Usage: diffshield" in res_help.stdout, "--help should output usage help"

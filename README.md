@@ -31,6 +31,7 @@ Cloud reviewers (CodeRabbit) catch this too late at PR review. `diffshield` runs
   - `[STRIP_GUARD]`: Flags removed guard clauses (`if ...: return/raise`).
   - `[STRIP_CONTEXT_MANAGER]`: Flags stripped context managers (`with` / `async with` locks, transactions, file handles).
   - `[STRIP_DECORATOR]`: Detects stripped security or route decorators (`@auth.required`, `@router.get`, `@dataclass`).
+  - `[HOLLOW_FUNC]`: Detects hollowed-out functions (previously implemented bodies replaced with `pass`, `...`, docstring-only, or `raise NotImplementedError`).
   - `[STRIP_ASSERTION]`: Detects deleted test assertions.
 - 🪝 **Pre-commit & CI Native:** Exits with `1` on contract violations to block bad agent commits.
 

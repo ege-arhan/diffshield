@@ -35,6 +35,26 @@ def _get_decorator_name(node: ast.AST) -> str:
         return ".".join(reversed(parts))
     return "decorator"
 
+def _is_stub_body(body: List[ast.stmt]) -> bool:
+    """Detect if function body is just pass, docstring, ellipsis, or NotImplementedError."""
+    for stmt in body:
+        if isinstance(stmt, ast.Pass):
+            continue
+        if isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Constant):
+            if isinstance(stmt.value.value, str) or stmt.value.value is Ellipsis:
+                continue
+        if isinstance(stmt, ast.Raise):
+            exc = stmt.exc
+            name = None
+            if isinstance(exc, ast.Name):
+                name = exc.id
+            elif isinstance(exc, ast.Call) and isinstance(exc.func, ast.Name):
+                name = exc.func.id
+            if name == "NotImplementedError":
+                continue
+        return False
+    return True
+
 class ASTInspector:
     @staticmethod
     def extract_entities(source: str) -> Dict[str, any]:
@@ -46,7 +66,8 @@ class ASTInspector:
             "try_blocks": 0,
             "assertions": 0,
             "guard_clauses": 0,
-            "with_blocks": 0
+            "with_blocks": 0,
+            "stub_funcs": set()
         }
         if not source.strip():
             return data
@@ -61,6 +82,8 @@ class ASTInspector:
                 data["functions"].add(node.name)
                 for dec in node.decorator_list:
                     data["decorators"].add((node.name, f"@{_get_decorator_name(dec)}"))
+                if _is_stub_body(node.body):
+                    data["stub_funcs"].add(node.name)
             elif isinstance(node, ast.ClassDef):
                 data["classes"].add(node.name)
                 for dec in node.decorator_list:
@@ -124,6 +147,14 @@ def compare_entities(old_meta: Dict[str, any], new_meta: Dict[str, any], path: s
     if old_with > new_with:
         diff_cnt = old_with - new_with
         violations.append(f"[STRIP_CONTEXT_MANAGER] {prefix}stripped {diff_cnt} context manager (with) block(s)")
+
+    # 8. Hollowed out functions (implemented function replaced with pass/.../NotImplementedError)
+    old_stubs = old_meta.get("stub_funcs", set())
+    new_stubs = new_meta.get("stub_funcs", set())
+    surviving_funcs = old_meta.get("functions", set()) & new_meta.get("functions", set())
+    hollowed = sorted(f for f in (new_stubs - old_stubs) if f in surviving_funcs)
+    if hollowed:
+        violations.append(f"[HOLLOW_FUNC] {prefix}function body replaced with stub/pass -> {', '.join(hollowed)}")
 
     return violations
 
@@ -196,7 +227,7 @@ def main():
         return
 
     if any(arg in sys.argv[1:] for arg in ("-v", "--version", "version")):
-        print("diffshield v0.1.5")
+        print("diffshield v0.1.6")
         return
 
     # ponytail: naive sys.argv parsing. Upgrade to argparse when subcommands or complex flags are added.
