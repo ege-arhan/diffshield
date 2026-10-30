@@ -80,6 +80,31 @@ def authenticate(token: str):
     assert any("[HOLLOW_FUNC]" in v for v in violations_hollow), "should detect hollowed out function"
     assert any("authenticate" in v for v in violations_hollow)
 
+    # Scoped method tracking: dropping method from one class while another class keeps same method name
+    src_scoped_old = """
+class UserRepo:
+    def delete(self, id):
+        return True
+
+class OrderRepo:
+    def delete(self, id):
+        return False
+"""
+    src_scoped_new = """
+class UserRepo:
+    def delete(self, id):
+        return True
+
+class OrderRepo:
+    pass
+"""
+    old_scoped = ASTInspector.extract_entities(src_scoped_old)
+    new_scoped = ASTInspector.extract_entities(src_scoped_new)
+    assert "UserRepo.delete" in old_scoped["functions"]
+    assert "OrderRepo.delete" in old_scoped["functions"]
+    violations_scoped = compare_entities(old_scoped, new_scoped, path="repo.py")
+    assert any("[DROP_FUNC]" in v and "OrderRepo.delete" in v for v in violations_scoped), "should detect dropped scoped method"
+
     import os
     here = os.path.dirname(os.path.abspath(__file__))
     res = subprocess.run(["python3", os.path.join(here, "diffshield.py"), "--json"], capture_output=True, text=True, cwd=here)
@@ -89,7 +114,7 @@ def authenticate(token: str):
     assert res_q.stdout == "", "--quiet should produce no output on clean diff"
 
     res_v = subprocess.run(["python3", os.path.join(here, "diffshield.py"), "--version"], capture_output=True, text=True, cwd=here)
-    assert "0.1.6" in res_v.stdout, "--version should output diffshield v0.1.6"
+    assert "0.1.7" in res_v.stdout, "--version should output diffshield v0.1.7"
 
     res_help = subprocess.run(["python3", os.path.join(here, "diffshield.py"), "--help"], capture_output=True, text=True, cwd=here)
     assert "Usage: diffshield" in res_help.stdout, "--help should output usage help"

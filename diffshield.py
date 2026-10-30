@@ -55,6 +55,76 @@ def _is_stub_body(body: List[ast.stmt]) -> bool:
         return False
     return True
 
+class _EntityVisitor(ast.NodeVisitor):
+    def __init__(self):
+        self.scope: List[str] = []
+        self.data = {
+            "functions": set(),
+            "classes": set(),
+            "decorators": set(),
+            "try_blocks": 0,
+            "assertions": 0,
+            "guard_clauses": 0,
+            "with_blocks": 0,
+            "stub_funcs": set()
+        }
+
+    def _qualname(self, name: str) -> str:
+        return ".".join(self.scope + [name]) if self.scope else name
+
+    def visit_ClassDef(self, node: ast.ClassDef):
+        qname = self._qualname(node.name)
+        self.data["classes"].add(qname)
+        for dec in node.decorator_list:
+            self.data["decorators"].add((qname, f"@{_get_decorator_name(dec)}"))
+        self.scope.append(node.name)
+        self.generic_visit(node)
+        self.scope.pop()
+
+    def _handle_func(self, node):
+        qname = self._qualname(node.name)
+        self.data["functions"].add(qname)
+        for dec in node.decorator_list:
+            self.data["decorators"].add((qname, f"@{_get_decorator_name(dec)}"))
+        if _is_stub_body(node.body):
+            self.data["stub_funcs"].add(qname)
+        self.scope.append(node.name)
+        self.generic_visit(node)
+        self.scope.pop()
+
+    def visit_FunctionDef(self, node: ast.FunctionDef):
+        self._handle_func(node)
+
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef):
+        self._handle_func(node)
+
+    def visit_Try(self, node: ast.Try):
+        self.data["try_blocks"] += 1
+        self.generic_visit(node)
+
+    def visit_TryStar(self, node):
+        self.data["try_blocks"] += 1
+        self.generic_visit(node)
+
+    def visit_With(self, node: ast.With):
+        self.data["with_blocks"] += 1
+        self.generic_visit(node)
+
+    def visit_AsyncWith(self, node: ast.AsyncWith):
+        self.data["with_blocks"] += 1
+        self.generic_visit(node)
+
+    def visit_Assert(self, node: ast.Assert):
+        self.data["assertions"] += 1
+        self.generic_visit(node)
+
+    def visit_If(self, node: ast.If):
+        for stmt in node.body:
+            if isinstance(stmt, (ast.Raise, ast.Return)):
+                self.data["guard_clauses"] += 1
+                break
+        self.generic_visit(node)
+
 class ASTInspector:
     @staticmethod
     def extract_entities(source: str) -> Dict[str, any]:
@@ -77,30 +147,9 @@ class ASTInspector:
         except SyntaxError:
             return data
 
-        for node in ast.walk(tree):
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                data["functions"].add(node.name)
-                for dec in node.decorator_list:
-                    data["decorators"].add((node.name, f"@{_get_decorator_name(dec)}"))
-                if _is_stub_body(node.body):
-                    data["stub_funcs"].add(node.name)
-            elif isinstance(node, ast.ClassDef):
-                data["classes"].add(node.name)
-                for dec in node.decorator_list:
-                    data["decorators"].add((node.name, f"@{_get_decorator_name(dec)}"))
-            elif isinstance(node, ast.Try):
-                data["try_blocks"] += 1
-            elif isinstance(node, (ast.With, ast.AsyncWith)):
-                data["with_blocks"] += 1
-            elif isinstance(node, ast.Assert):
-                data["assertions"] += 1
-            elif isinstance(node, ast.If):
-                # Detect guard clauses: if <cond>: raise / return
-                for stmt in node.body:
-                    if isinstance(stmt, (ast.Raise, ast.Return)):
-                        data["guard_clauses"] += 1
-                        break
-        return data
+        visitor = _EntityVisitor()
+        visitor.visit(tree)
+        return visitor.data
 
 def compare_entities(old_meta: Dict[str, any], new_meta: Dict[str, any], path: str = "") -> List[str]:
     """Compare entity sets and counters to identify semantic deletions."""
@@ -227,7 +276,7 @@ def main():
         return
 
     if any(arg in sys.argv[1:] for arg in ("-v", "--version", "version")):
-        print("diffshield v0.1.6")
+        print("diffshield v0.1.7")
         return
 
     # ponytail: naive sys.argv parsing. Upgrade to argparse when subcommands or complex flags are added.
