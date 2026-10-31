@@ -105,6 +105,26 @@ class OrderRepo:
     violations_scoped = compare_entities(old_scoped, new_scoped, path="repo.py")
     assert any("[DROP_FUNC]" in v and "OrderRepo.delete" in v for v in violations_scoped), "should detect dropped scoped method"
 
+    # Unittest-style assertion tracking (self.assertEqual, mock.assert_called, etc.)
+    src_unittest_old = """
+class TestApi(unittest.TestCase):
+    def test_run(self):
+        self.assertEqual(1, 1)
+        self.assertTrue(True)
+        mock_obj.assert_called_once()
+"""
+    src_unittest_new = """
+class TestApi(unittest.TestCase):
+    def test_run(self):
+        pass
+"""
+    old_ut = ASTInspector.extract_entities(src_unittest_old)
+    new_ut = ASTInspector.extract_entities(src_unittest_new)
+    assert old_ut["assertions"] == 3, f"expected 3 assertions in unittest style, got {old_ut['assertions']}"
+    assert new_ut["assertions"] == 0
+    violations_ut = compare_entities(old_ut, new_ut, path="test_api.py")
+    assert any("[STRIP_ASSERTION]" in v for v in violations_ut), "should detect dropped unittest assertions"
+
     import os
     here = os.path.dirname(os.path.abspath(__file__))
     res = subprocess.run(["python3", os.path.join(here, "diffshield.py"), "--json"], capture_output=True, text=True, cwd=here)
@@ -114,7 +134,7 @@ class OrderRepo:
     assert res_q.stdout == "", "--quiet should produce no output on clean diff"
 
     res_v = subprocess.run(["python3", os.path.join(here, "diffshield.py"), "--version"], capture_output=True, text=True, cwd=here)
-    assert "0.1.7" in res_v.stdout, "--version should output diffshield v0.1.7"
+    assert "0.1.8" in res_v.stdout, "--version should output diffshield v0.1.8"
 
     res_help = subprocess.run(["python3", os.path.join(here, "diffshield.py"), "--help"], capture_output=True, text=True, cwd=here)
     assert "Usage: diffshield" in res_help.stdout, "--help should output usage help"

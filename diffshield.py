@@ -118,6 +118,17 @@ class _EntityVisitor(ast.NodeVisitor):
         self.data["assertions"] += 1
         self.generic_visit(node)
 
+    def visit_Call(self, node: ast.Call):
+        # ponytail: prefix matching for unittest/mock assertions. Upgrade to symbol resolution if custom assertion helpers need strict tracking.
+        name = ""
+        if isinstance(node.func, ast.Attribute):
+            name = node.func.attr
+        elif isinstance(node.func, ast.Name):
+            name = node.func.id
+        if name.startswith("assert") and name != "assert":
+            self.data["assertions"] += 1
+        self.generic_visit(node)
+
     def visit_If(self, node: ast.If):
         for stmt in node.body:
             if isinstance(stmt, (ast.Raise, ast.Return)):
@@ -276,7 +287,7 @@ def main():
         return
 
     if any(arg in sys.argv[1:] for arg in ("-v", "--version", "version")):
-        print("diffshield v0.1.7")
+        print("diffshield v0.1.8")
         return
 
     # ponytail: naive sys.argv parsing. Upgrade to argparse when subcommands or complex flags are added.
