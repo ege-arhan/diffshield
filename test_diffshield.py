@@ -125,6 +125,30 @@ class TestApi(unittest.TestCase):
     violations_ut = compare_entities(old_ut, new_ut, path="test_api.py")
     assert any("[STRIP_ASSERTION]" in v for v in violations_ut), "should detect dropped unittest assertions"
 
+    # Finally cleanup block stripping
+    src_finally_old = """
+def process():
+    try:
+        do_work()
+    except Exception:
+        handle_error()
+    finally:
+        cleanup_resources()
+"""
+    src_finally_new = """
+def process():
+    try:
+        do_work()
+    except Exception:
+        handle_error()
+"""
+    old_fin = ASTInspector.extract_entities(src_finally_old)
+    new_fin = ASTInspector.extract_entities(src_finally_new)
+    assert old_fin["finally_blocks"] == 1
+    assert new_fin["finally_blocks"] == 0
+    violations_fin = compare_entities(old_fin, new_fin, path="worker.py")
+    assert any("[STRIP_FINALLY]" in v for v in violations_fin), "should detect stripped finally block"
+
     import os
     here = os.path.dirname(os.path.abspath(__file__))
     res = subprocess.run(["python3", os.path.join(here, "diffshield.py"), "--json"], capture_output=True, text=True, cwd=here)
@@ -134,7 +158,7 @@ class TestApi(unittest.TestCase):
     assert res_q.stdout == "", "--quiet should produce no output on clean diff"
 
     res_v = subprocess.run(["python3", os.path.join(here, "diffshield.py"), "--version"], capture_output=True, text=True, cwd=here)
-    assert "0.1.8" in res_v.stdout, "--version should output diffshield v0.1.8"
+    assert "0.1.9" in res_v.stdout, "--version should output diffshield v0.1.9"
 
     res_help = subprocess.run(["python3", os.path.join(here, "diffshield.py"), "--help"], capture_output=True, text=True, cwd=here)
     assert "Usage: diffshield" in res_help.stdout, "--help should output usage help"

@@ -63,6 +63,7 @@ class _EntityVisitor(ast.NodeVisitor):
             "classes": set(),
             "decorators": set(),
             "try_blocks": 0,
+            "finally_blocks": 0,
             "assertions": 0,
             "guard_clauses": 0,
             "with_blocks": 0,
@@ -100,10 +101,14 @@ class _EntityVisitor(ast.NodeVisitor):
 
     def visit_Try(self, node: ast.Try):
         self.data["try_blocks"] += 1
+        if node.finalbody:
+            self.data["finally_blocks"] += 1
         self.generic_visit(node)
 
     def visit_TryStar(self, node):
         self.data["try_blocks"] += 1
+        if getattr(node, "finalbody", None):
+            self.data["finally_blocks"] += 1
         self.generic_visit(node)
 
     def visit_With(self, node: ast.With):
@@ -145,6 +150,7 @@ class ASTInspector:
             "classes": set(),
             "decorators": set(),
             "try_blocks": 0,
+            "finally_blocks": 0,
             "assertions": 0,
             "guard_clauses": 0,
             "with_blocks": 0,
@@ -215,6 +221,14 @@ def compare_entities(old_meta: Dict[str, any], new_meta: Dict[str, any], path: s
     hollowed = sorted(f for f in (new_stubs - old_stubs) if f in surviving_funcs)
     if hollowed:
         violations.append(f"[HOLLOW_FUNC] {prefix}function body replaced with stub/pass -> {', '.join(hollowed)}")
+
+    # 9. Stripped finally blocks (cleanup logic)
+    # ponytail: count finally blocks. Upgrade to statement AST diff if partial cleanup drops need detection.
+    old_finally = old_meta.get("finally_blocks", 0)
+    new_finally = new_meta.get("finally_blocks", 0)
+    if old_finally > new_finally:
+        diff_cnt = old_finally - new_finally
+        violations.append(f"[STRIP_FINALLY] {prefix}stripped {diff_cnt} finally cleanup block(s)")
 
     return violations
 
@@ -287,7 +301,7 @@ def main():
         return
 
     if any(arg in sys.argv[1:] for arg in ("-v", "--version", "version")):
-        print("diffshield v0.1.8")
+        print("diffshield v0.1.9")
         return
 
     # ponytail: naive sys.argv parsing. Upgrade to argparse when subcommands or complex flags are added.
