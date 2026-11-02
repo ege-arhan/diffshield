@@ -7,3 +7,7 @@ __pycache__/
 env/
 venv/
 .pytest_cache/
+build/
+dist/
+*.egg-info/
+

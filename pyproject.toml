@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "diffshield"
+version = "0.1.9"
+description = "Zero-overhead semantic diff firewall for AI coding agents"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+authors = [
+    { name = "Ege Arhan", email = "egearhany@gmail.com" }
+]
+
+[project.scripts]
+diffshield = "diffshield:main"
+
+[tool.setuptools]
+py-modules = ["diffshield"]
