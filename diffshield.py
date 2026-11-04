@@ -232,6 +232,19 @@ def compare_entities(old_meta: Dict[str, any], new_meta: Dict[str, any], path: s
 
     return violations
 
+def is_git_repository() -> bool:
+    """Check if the current directory is inside a git work tree."""
+    try:
+        res = subprocess.run(
+            ["git", "rev-parse", "--is-inside-work-tree"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+        return res.returncode == 0
+    except OSError:
+        return False
+
 def get_git_file_content(commit_ref: str, path: str) -> str:
     """Get file content from git at a given ref (e.g. HEAD) or index if commit_ref is empty."""
     target = f":{path}" if not commit_ref else f"{commit_ref}:{path}"
@@ -309,6 +322,14 @@ def main():
     quiet_mode = "--quiet" in sys.argv or "-q" in sys.argv
     allow_deletions = "--allow-deletions" in sys.argv
     staged = "--staged" in sys.argv or "--cached" in sys.argv
+
+    if not is_git_repository():
+        msg = "diffshield error: not a git repository (or any parent up to mount point /)"
+        if json_mode:
+            print(json.dumps({"error": msg, "clean": False, "violations": [msg], "count": 1}, indent=2))
+        else:
+            print(f"❌ {msg}", file=sys.stderr)
+        sys.exit(2)
 
     base_ref = "HEAD"
     for i, arg in enumerate(sys.argv):

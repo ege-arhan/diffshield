@@ -192,6 +192,21 @@ def test_whole_file_deletion_blocked():
         assert "[DROP_FUNC]" in res.stdout, "deleted file should report DROP_FUNC"
 
 
+def test_not_a_git_repo_graceful_exit():
+    """Running outside a git repository should exit cleanly with code 2 and a clear message."""
+    import os, tempfile
+    here = os.path.dirname(os.path.abspath(__file__))
+    with tempfile.TemporaryDirectory() as tmp:
+        res = subprocess.run(["python3", os.path.join(here, "diffshield.py")], cwd=tmp, capture_output=True, text=True)
+        assert res.returncode == 2, f"expected returncode 2, got {res.returncode}"
+        assert "not a git repository" in res.stderr
+
+        res_json = subprocess.run(["python3", os.path.join(here, "diffshield.py"), "--json"], cwd=tmp, capture_output=True, text=True)
+        assert res_json.returncode == 2, f"expected returncode 2 in json mode, got {res_json.returncode}"
+        assert "not a git repository" in res_json.stdout
+
+
 if __name__ == "__main__":
     test_ast_inspector()
     test_whole_file_deletion_blocked()
+    test_not_a_git_repo_graceful_exit()
