@@ -1,0 +1,9 @@
+- id: diffshield
+  name: diffshield
+  description: Zero-overhead semantic diff firewall for AI coding agents
+  entry: diffshield
+  language: python
+  types: [python]
+  stages: [pre-commit]
+  pass_filenames: false
+  args: [--staged]

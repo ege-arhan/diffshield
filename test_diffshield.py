@@ -206,7 +206,29 @@ def test_not_a_git_repo_graceful_exit():
         assert "not a git repository" in res_json.stdout
 
 
+def test_pre_commit_hooks_config():
+    """Verify .pre-commit-hooks.yaml format and hook configuration."""
+    import os
+    here = os.path.dirname(os.path.abspath(__file__))
+    hooks_path = os.path.join(here, ".pre-commit-hooks.yaml")
+    assert os.path.exists(hooks_path), ".pre-commit-hooks.yaml must exist"
+
+    # Minimal stdlib / safe parser check
+    import yaml
+    with open(hooks_path, "r", encoding="utf-8") as f:
+        hooks = yaml.safe_load(f)
+
+    assert isinstance(hooks, list) and len(hooks) >= 1
+    hook = hooks[0]
+    assert hook["id"] == "diffshield"
+    assert hook["entry"] == "diffshield"
+    assert hook["language"] == "python"
+    assert "--staged" in hook.get("args", [])
+    assert hook.get("pass_filenames") is False
+
+
 if __name__ == "__main__":
     test_ast_inspector()
     test_whole_file_deletion_blocked()
     test_not_a_git_repo_graceful_exit()
+    test_pre_commit_hooks_config()
