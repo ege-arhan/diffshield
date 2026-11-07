@@ -158,7 +158,7 @@ def process():
     assert res_q.stdout == "", "--quiet should produce no output on clean diff"
 
     res_v = subprocess.run(["python3", os.path.join(here, "diffshield.py"), "--version"], capture_output=True, text=True, cwd=here)
-    assert "0.1.9" in res_v.stdout, "--version should output diffshield v0.1.9"
+    assert "1.0.0" in res_v.stdout, "--version should output diffshield v1.0.0"
 
     res_help = subprocess.run(["python3", os.path.join(here, "diffshield.py"), "--help"], capture_output=True, text=True, cwd=here)
     assert "Usage: diffshield" in res_help.stdout, "--help should output usage help"

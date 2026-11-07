@@ -314,7 +314,7 @@ def main():
         return
 
     if any(arg in sys.argv[1:] for arg in ("-v", "--version", "version")):
-        print("diffshield v0.1.9")
+        print("diffshield v1.0.0")
         return
 
     # ponytail: naive sys.argv parsing. Upgrade to argparse when subcommands or complex flags are added.

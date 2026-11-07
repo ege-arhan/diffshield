@@ -99,7 +99,7 @@ Add `diffshield` to your `.pre-commit-config.yaml`:
 ```yaml
 repos:
   - repo: https://github.com/ege-arhan/diffshield
-    rev: v0.1.9
+    rev: v1.0.0
     hooks:
       - id: diffshield
 ```
